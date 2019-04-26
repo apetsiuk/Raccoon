@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+import rospy
+import numpy as np
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import LaserScan
+
+class WallFollow(object):
+    def __init__(self):
+        rospy.init_node("WallFollow")
+
+        rospy.Subscriber("/scan", LaserScan, self._latestScan)
+
+        self.pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
+
+        self.wall_distance = 1.1
+        self.last_cmd_linear_x = 0
+        self.last_cmd_angular_z = 0
+
+        rospy.loginfo("Ready to get out there and avoid some walls!")
+        rospy.spin()
+
+    def _latestScan(self, data):
+        right_zone = 0 if (np.asarray(data.ranges[0:65])).min() > self.wall_distance else 1
+        front_zone = 0 if (np.asarray(data.ranges[250:450])).min() > self.wall_distance else 1
+        left_zone = 0 if (np.asarray(data.ranges[655:720])).min() > self.wall_distance else 1
+        pattern = str(left_zone)+str(front_zone)+str(right_zone)
+        cmd = Twist()
+
+        rospy.loginfo(pattern)
+
+        if (pattern == '000' or pattern == '100' or pattern == '001' or pattern =='101'):
+            cmd.linear.x = np.clip(self.last_cmd_linear_x+0.004,0,1.2)
+            cmd.angular.z = 0
+        elif (pattern == '010' or pattern =='011'):
+            cmd.linear.x = 0
+            cmd.angular.z = np.clip(self.last_cmd_angular_z+0.03,0,1.2)
+        elif (pattern == '100' or pattern == '110'):
+            cmd.linear.x = 0
+            cmd.angular.z = np.clip(self.last_cmd_angular_z-0.03,0,1.2)
+        else:
+            cmd.linear.x = -0.1     
+            cmd.angular.z = 0
+        self.last_cmd_linear_x = cmd.linear.x
+        self.last_cmd_angular_z = cmd.angular.z
+        self.pub.publish(cmd)    
+
+if __name__ == "__main__":
+    try:
+        run = WallFollow()
+    except rospy.ROSInterruptException:
+        pass

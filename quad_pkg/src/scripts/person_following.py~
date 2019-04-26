@@ -1,0 +1,96 @@
+#!/usr/bin/env python
+
+import numpy as np
+import cv2, cv_bridge
+import rospy
+
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Image
+from std_srvs.srv import Empty
+
+
+
+def enter_teleop(req):
+    global last_press, state
+    state = 'teleop'
+    last_press = rospy.Time.now()
+    return([])
+
+
+def camera_callback(msg):
+
+    image = bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+
+    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    #dark_green = np.array([50,90,90])
+    #bright_green = np.array([90,255,255])
+    #                      R  G  B
+    dark_blue = np.array([0,200,200])
+    bright_blue = np.array([65,255,255])
+    # Threshold the HSV image to get only blue colors
+    mask = cv2.inRange(hsv, dark_blue, bright_blue)
+
+    # Mask the image by cropping appropriately
+    (height, width, depth) = image.shape
+    top_level = height / 2
+    bottom_level = top_level + 100
+    mask[0:top_level, 0:width] = 0
+    mask[bottom_level:height, 0:width] = 0
+
+
+
+
+
+    # PERSON DETECTION
+
+    hog = cv2.HOGDescriptor()
+    hog.setSVMDetector( cv2.HOGDescriptor_getDefaultPeopleDetector() )
+    found,w=hog.detectMultiScale(image, winStride=(8,8), padding=(32,32), scale=1.05)
+    for x, y, w, h in found:
+        # the HOG detector returns slightly larger rectangles than the real objects.
+        # so we slightly shrink the rectangles to get a nicer output.
+        pad_w, pad_h = int(0.15*w), int(0.05*h)
+        cv2.rectangle(image, (x+pad_w, y+pad_h), (x+w-pad_w, y+h-pad_h), (0, 255, 0), 1)
+
+
+
+
+
+    # Publish if not stopped using Teleop
+    if rospy.Time.now() - last_press > resume_delay:
+        pub.publish(msgout)
+    # If stopped using teleop
+    else:
+        msgout.linear.x = linear_speed_lower_limit
+        msgout.angular.z = 0
+
+    cv2.imshow("Predator", image[:,:,:])
+    # crop image                       y:y+h  x:x+w
+    #cv2.imshow("Lane follower", mask[280:480,20:620])
+    cv2.waitKey(2)
+
+
+if __name__ == "__main__":
+
+    # Global parameters
+    resume_delay = rospy.Duration.from_sec(rospy.get_param("/resume_delay"))
+    linear_speed_upper_limit = rospy.get_param("/max_speed")
+    linear_speed_lower_limit = 0
+    angular_speed_upper_limit = 0.5
+
+    rospy.init_node('line_navigator', anonymous=True)
+    bridge = cv_bridge.CvBridge()
+    cv2.namedWindow("Lane follower", 1)
+    
+    rospy.sleep(1)
+    last_press = rospy.Time.now() - resume_delay
+    s = rospy.Service('button_press', Empty, enter_teleop)
+
+    pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
+    # For real Jackal
+    sub = rospy.Subscriber('/camera2/usb_cam2/image_raw', Image, camera_callback)
+    # For simulation in Gazebo
+    #sub = rospy.Subscriber('mybot/camera_r/image_raw', Image, camera_callback)
+    msgout = Twist()
+
+    rospy.spin()

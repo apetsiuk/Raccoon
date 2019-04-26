@@ -1,0 +1,53 @@
+<launch>
+ <arg name="recorder" default="true" />
+ <param name="resume_delay" type="double" value="10" />
+ <param name="max_speed" type="double" value="1" />
+ <param name="explore_time" type="double" value="30" />
+ <group ns="camera1">
+  <node name="usb_cam1" pkg="usb_cam" type="usb_cam_node" output="screen" >
+    <param name="video_device" value="/dev/video0" />
+    <param name="image_width" value="320" />
+    <param name="image_height" value="240" />
+    <param name="pixel_format" value="yuyv" />
+    <param name="camera_frame_id" value="yuyv" />
+    <param name="io_method" value="mmap"/>
+  </node>
+  <node name="image_view" pkg="image_view" type="image_view" respawn="false" output="screen">
+    <remap from="image" to="/eyes/camera_l/image_raw"/>
+    <param name="autosize" value="true" />
+  </node>
+ </group>
+
+<group ns="camera2">
+  <node name="usb_cam2" pkg="usb_cam" type="usb_cam_node" output="screen" >
+    <param name="video_device" value="/dev/video1" />
+    <param name="image_width" value="320" />
+    <param name="image_height" value="240" />
+    <param name="pixel_format" value="yuyv" />
+    <param name="camera_frame_id" value="yuyv" />
+    <param name="io_method" value="mmap"/>
+  </node>
+  <node name="image_view" pkg="image_view" type="image_view" respawn="false" output="screen">
+    <remap from="image" to="/eyes/camera_r/image_raw"/>
+    <param name="autosize" value="true" />
+  </node>
+ </group>
+
+<!-- ====== LIDAR ====== -->
+
+  <node name="urg_node" pkg="urg_node" type="urg_node" output="screen">
+    <param name="ip_address" value="192.168.0.10"/>
+    <param name="serial_port" value="/dev/ttyACM0"/>
+    <param name="serial_baud" value="115200"/>
+    <param name="frame_id" value="hokuyo_link"/>
+    <param name="calibrate_time" value="true"/>
+    <param name="publish_intensity" value="false"/>
+    <param name="publish_multiecho" value="false"/>
+    <param name="angle_min" value="-1.5707963"/>
+    <param name="angle_max" value="1.5707963"/>
+  </node>
+
+<include file ="$(find jackal_navigation)/launch/include/gmapping.launch"/>
+
+<node name="recorder" pkg="rosbag" type="record" output="screen" args="-o $(find quad_pkg)/Recordings/recordings /tf /scan" if="$(arg recorder)"/>
+</launch>

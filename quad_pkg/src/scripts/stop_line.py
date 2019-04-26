@@ -1,0 +1,81 @@
+#!/usr/bin/env python
+import rospy
+import numpy as np
+import cv2, cv_bridge
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import Image
+
+class StopLine(object):
+    def __init__(self):
+        rospy.init_node("StopLine")
+        self.bridge = cv_bridge.CvBridge()
+        cv2.namedWindow("Predator", 1)
+
+        rospy.Subscriber('camera2/usb_cam2/image_raw', Image, self._latestImage)
+
+        self.pub = rospy.Publisher("/cmd_vel", Twist, queue_size=3)
+
+        self.person_distance = 1.1
+        self.last_cmd_linear_x = 0
+        self.last_state = 0
+        self.line_detected = 0
+        self.time_start = rospy.Time.now()
+
+        rospy.loginfo("Ready to get out there and stop at the horizontal lines!")
+        rospy.spin()
+
+    def _latestImage(self, data):
+        kernelOpen=np.ones((5,5))
+        kernelClose=np.ones((20,20))
+        font=cv2.cv.InitFont(cv2.cv.CV_FONT_HERSHEY_SIMPLEX,2,0.5,0,3,1)
+        image = self.bridge.imgmsg_to_cv2(data, desired_encoding='bgr8')
+        dark_blue = np.array([150,90,50])
+        bright_blue = np.array([255,150,100])
+        mask = cv2.inRange(image, dark_blue, bright_blue)
+
+        (height, width, depth) = image.shape
+
+        # Threshold the HSV image to get only blue colors
+        mask = cv2.inRange(image, dark_blue, bright_blue)
+        mask[0:400, 0:width] = 0
+        mask[460:height, 0:width] = 0
+        mask[400:460, 0:220] = 0
+        mask[400:460, 420:width] = 0
+        
+        #Morphology
+        maskOpen=cv2.morphologyEx(mask,cv2.MORPH_OPEN,kernelOpen)
+        maskClose=cv2.morphologyEx(maskOpen,cv2.MORPH_CLOSE,kernelClose)
+        maskFinal=maskClose
+        conts,h=cv2.findContours(maskFinal.copy(),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
+
+        #cv2.drawContours(dilation,conts,-1,(0,0,255),3)
+        #line_number = 0
+        for i in range(len(conts)):
+            x,y,w,h=cv2.boundingRect(conts[i])
+            if w*h > 3000:
+                #line_number = line_number
+                cv2.rectangle(image,(x,y),(x+w,y+h),(0,0,255), 2)
+                self.line_detected = 1
+                #cv2.cv.PutText(cv2.cv.fromarray(image), str(i+1),(x,y+h),font,(0,255,255))
+            else:
+                self.line_detected = 0
+        cv2.imshow("CAM_RIGHT", image)
+        cv2.imshow("mask", mask)
+        cv2.waitKey(2)
+        
+        if self.last_state - self.line_detected > 0:
+            self.time_start = rospy.Time.now()
+        rospy.loginfo(self.last_state - self.line_detected)
+        cmd = Twist()
+        #if rospy.Time.now() - self.time_start < rospy.Duration.from_sec(2):
+          #  cmd.linear.x = 0
+        #else:
+         #   cmd.linear.x = 0.12
+        self.pub.publish(image[:,:,1])
+        self.last_state = self.line_detected
+
+if __name__ == "__main__":
+    try:
+        run = StopLine()
+    except rospy.ROSInterruptException:
+        pass
