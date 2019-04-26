@@ -3,6 +3,10 @@
 # Robotics Quadrathlon
 *A camera and a LIDAR based robotics quadrathlon with a Clearpath Jackal robot. Implemented with ROS in Ubuntu.*
 **Contributors: [Narendra Patwardhan](https://github.com/NarendraPatwardhan/) & [Aliaksei Petsiuk](https://github.com/apetsiuk)**
+<br/>
+[Video 1](https://www.youtube.com/watch?v=2_tBJL9kv4g)
+[Video 2](https://www.youtube.com/watch?v=hT2FvKOHYw8&t=21s)
+<br/>
 
 ### Project Objectives
 
